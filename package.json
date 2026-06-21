@@ -1,0 +1,16 @@
+{
+  "name": "insurance-premium-engine",
+  "version": "1.0.0",
+  "description": "Dynamic insurance premium calculator with rule engine",
+  "scripts": {
+    "start:all": "concurrently -n gateway,plans,rules,quotes -c blue,green,magenta,yellow \"cd api-gateway && npm run start:dev\" \"cd plan-service && npm run start:dev\" \"cd rule-engine && npm run start:dev\" \"cd quote-service && npm run start:dev\"",
+    "start:gateway": "cd api-gateway && npm run start:dev",
+    "start:plans": "cd plan-service && npm run start:dev",
+    "start:rules": "cd rule-engine && npm run start:dev",
+    "start:quotes": "cd quote-service && npm run start:dev",
+    "install:all": "cd api-gateway && npm install && cd ../plan-service && npm install && cd ../rule-engine && npm install && cd ../quote-service && npm install"
+  },
+  "dependencies": {
+    "concurrently": "^10.0.3"
+  }
+}
