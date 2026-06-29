@@ -11,9 +11,15 @@ export class ProxyService {
       const config: any = {
         method,
         url,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-correlation-id': headers?.['x-correlation-id'],
+          'idempotency-key': headers?.['idempotency-key'],
+        },
       };
+
       if (body) config.data = body;
+
       const response = await firstValueFrom(this.httpService.request(config));
       return response.data;
     } catch (error: any) {

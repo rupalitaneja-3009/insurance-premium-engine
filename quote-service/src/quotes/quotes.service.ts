@@ -23,17 +23,53 @@ export class QuotesService {
     private readonly aiService: AiService,
   ) {}
 
-  async calculate(dto: CalculateQuoteDto) {
+  async calculate(
+    dto: CalculateQuoteDto,
+    idempotencyKey?: string,
+    correlationId?: string,
+  ) {
+    if (idempotencyKey) {
+      const idemKey = `idempotency:${idempotencyKey}`;
+      const existingQuoteId = await this.redisService.get(idemKey);
+
+      if (existingQuoteId) {
+        this.logger.log(
+          `[${correlationId || 'no-correlation'}] Idempotency HIT`,
+        );
+
+        const existingQuote = await this.findById(existingQuoteId);
+
+        return {
+          quoteId: existingQuote.quoteId,
+          validUntil: existingQuote.validUntil,
+          plan: {
+            code: existingQuote.planCode,
+            name: existingQuote.planName,
+            sumInsured: existingQuote.sumInsured,
+            tenure: existingQuote.tenure,
+            city: existingQuote.city,
+          },
+          members: existingQuote.members,
+          breakdown: existingQuote.breakdown,
+          addons: existingQuote.selectedAddons,
+          cached: false,
+          idempotent: true,
+        };
+      }
+    }
     const cacheKey = `quote:${dto.planCode}:${dto.sumInsured}:${dto.city}:${dto.tenure}:${JSON.stringify(dto.members)}:${JSON.stringify(dto.addonCodes)}`;
 
     const cached = await this.redisService.get(cacheKey);
     if (cached) {
-      this.logger.log('Cache HIT — returning cached quote');
+      this.logger.log(
+        `[${correlationId || 'no-correlation'}] Cache HIT — returning cached quote`,
+      );
       return { ...JSON.parse(cached), cached: true };
     }
 
-    this.logger.log('Cache MISS — calculating fresh quote');
-
+    this.logger.log(
+      `[${correlationId || 'no-correlation'}] Cache MISS — calculating fresh quote`,
+    );
     const planUrl = this.config.get('PLAN_SERVICE_URL');
     const planResponse = await firstValueFrom(
       this.httpService.get(`${planUrl}/plans/code/${dto.planCode}`),
@@ -95,8 +131,12 @@ export class QuotesService {
       validUntil,
     });
 
-    const saved = await this.quoteRepository.save(quoteEntity) as Quote;
+    const saved = await this.quoteRepository.save(quoteEntity);
 
+    if (idempotencyKey) {
+      const idemKey = `idempotency:${idempotencyKey}`;
+      await this.redisService.set(idemKey, saved.quoteId, 86400);
+    }
     const result = {
       quoteId: saved.quoteId,
       validUntil: saved.validUntil,
@@ -126,13 +166,16 @@ export class QuotesService {
   }
 
   async findById(id: string): Promise<Quote> {
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-  const quote = await this.quoteRepository.findOne({
-    where: isUuid ? { id } : { quoteId: id },
-  });
-  if (!quote) throw new NotFoundException(`Quote ${id} not found`);
-  return quote;
-}
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        id,
+      );
+    const quote = await this.quoteRepository.findOne({
+      where: isUuid ? { id } : { quoteId: id },
+    });
+    if (!quote) throw new NotFoundException(`Quote ${id} not found`);
+    return quote;
+  }
 
   async findByUserId(userId: string) {
     return this.quoteRepository.find({
@@ -173,7 +216,8 @@ export class QuotesService {
     return {
       total,
       byStatus: { active, converted, expired },
-      conversionRate: total > 0 ? `${Math.round((converted / total) * 100)}%` : '0%',
+      conversionRate:
+        total > 0 ? `${Math.round((converted / total) * 100)}%` : '0%',
     };
   }
 
@@ -218,13 +262,43 @@ export class QuotesService {
     };
 
     this.logger.log(`Generating AI plan suggestion for quote ${quoteId}`);
-    const suggestion = await this.aiService.suggestBetterPlan(quoteData, allPlans);
+    const suggestion = await this.aiService.suggestBetterPlan(
+      quoteData,
+      allPlans,
+    );
 
     return {
       quoteId: quote.quoteId,
       currentPlan: quote.planName,
       currentPremium: quote.totalPremium,
       suggestion,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  async underwritingReview(quoteId: string) {
+    const quote = await this.findById(quoteId);
+
+    const quoteData = {
+      quoteId: quote.quoteId,
+      planName: quote.planName,
+      sumInsured: quote.sumInsured,
+      city: quote.city,
+      tenure: quote.tenure,
+      members: quote.members,
+      breakdown: quote.breakdown,
+      addons: quote.selectedAddons,
+      totalPremium: quote.totalPremium,
+    };
+
+    this.logger.log(`Generating AI underwriting review for quote ${quoteId}`);
+
+    const review = await this.aiService.underwritingReview(quoteData);
+
+    return {
+      quoteId: quote.quoteId,
+      totalPremium: quote.totalPremium,
+      review,
       generatedAt: new Date().toISOString(),
     };
   }

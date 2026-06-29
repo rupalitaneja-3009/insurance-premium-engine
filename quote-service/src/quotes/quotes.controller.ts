@@ -1,4 +1,12 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  Query,
+  Headers,
+} from '@nestjs/common';
 import { QuotesService } from './quotes.service';
 import { CalculateQuoteDto } from './dto/calculate-quote.dto';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -10,10 +18,13 @@ export class QuotesController {
 
   @Post('calculate')
   @ApiOperation({ summary: 'Calculate insurance premium quote' })
-  calculate(@Body() dto: CalculateQuoteDto) {
-    return this.quotesService.calculate(dto);
+  calculate(
+    @Body() dto: CalculateQuoteDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+    @Headers('x-correlation-id') correlationId?: string,
+  ) {
+    return this.quotesService.calculate(dto, idempotencyKey, correlationId);
   }
-
   @Post('compare')
   @ApiOperation({ summary: 'Compare premium across multiple plans' })
   compare(
@@ -45,6 +56,12 @@ export class QuotesController {
   @ApiOperation({ summary: 'AI suggestion for better plan' })
   suggestPlan(@Param('id') id: string) {
     return this.quotesService.suggestBetterPlan(id);
+  }
+
+  @Get(':id/underwriting-review')
+  @ApiOperation({ summary: 'AI underwriting risk review for quote' })
+  underwritingReview(@Param('id') id: string) {
+    return this.quotesService.underwritingReview(id);
   }
 
   @Get(':id')

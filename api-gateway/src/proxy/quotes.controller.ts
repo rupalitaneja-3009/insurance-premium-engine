@@ -1,4 +1,12 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  Query,
+  Headers,
+} from '@nestjs/common';
 import { ProxyService } from './proxy.service';
 import { ConfigService } from '@nestjs/config';
 import { ApiTags } from '@nestjs/swagger';
@@ -16,20 +24,22 @@ export class QuotesController {
   }
 
   @Post('calculate')
-  calculate(@Body() body: any) {
+  calculate(@Body() body: any, @Headers() headers: any) {
     return this.proxyService.forward(
       `${this.baseUrl}/quotes/calculate`,
       'POST',
       body,
+      headers,
     );
   }
 
   @Post('compare')
-  compare(@Body() body: any) {
+  compare(@Body() body: any, @Headers() headers: any) {
     return this.proxyService.forward(
       `${this.baseUrl}/quotes/compare`,
       'POST',
       body,
+      headers,
     );
   }
 
@@ -47,17 +57,31 @@ export class QuotesController {
   }
 
   @Get(':id/explain')
-explainPremium(@Param('id') id: string) {
-  return this.proxyService.forward(`${this.baseUrl}/quotes/${id}/explain`, 'GET');
-}
+  explainPremium(@Param('id') id: string) {
+    return this.proxyService.forward(
+      `${this.baseUrl}/quotes/${id}/explain`,
+      'GET',
+    );
+  }
 
-@Get(':id/suggest')
-suggestPlan(@Param('id') id: string) {
-  return this.proxyService.forward(`${this.baseUrl}/quotes/${id}/suggest`, 'GET');
-}
+  @Get(':id/suggest')
+  suggestPlan(@Param('id') id: string) {
+    return this.proxyService.forward(
+      `${this.baseUrl}/quotes/${id}/suggest`,
+      'GET',
+    );
+  }
 
-@Get(':id')
-findOne(@Param('id') id: string) {
-  return this.proxyService.forward(`${this.baseUrl}/quotes/${id}`, 'GET');
-}
+  @Get(':id/underwriting-review')
+  underwritingReview(@Param('id') id: string) {
+    return this.proxyService.forward(
+      `${this.baseUrl}/quotes/${id}/underwriting-review`,
+      'GET',
+    );
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.proxyService.forward(`${this.baseUrl}/quotes/${id}`, 'GET');
+  }
 }
